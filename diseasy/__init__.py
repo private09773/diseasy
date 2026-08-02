@@ -1,72 +1,26 @@
-"""Diseasy — a from-scratch, discord.py-inspired Discord bot library."""
+"""
+diseasy/__init__.py
+
+Public API surface for the Diseasy package.
+Merge this with whatever you already export — don't overwrite
+existing exports (embeds, components, views, etc.) that aren't
+listed here since I don't have visibility into those files.
+"""
 
 from .client import Client
-from .errors import (
-    DiseasyException,
-    GatewayError,
-    HTTPException,
-    CommandError,
-    CommandNotFound,
-    MissingPermissions,
-    CommandOnCooldown,
-    BadArgument,
-    CheckFailure,
-    CustomError,
-)
-from .flags import Intents, Permissions
-from .ui.embed import Embed
-from .ui.button import Button
-from .ui.select import Select, SelectOption
-from .ui.modal import Modal, ModalInput
-from .ui.view import View
-from .ui.components import (
-    Container,
-    ContainerText,
-    ContainerSeparator,
-    ContainerImage,
-    ContainerThumbnail,
-    ContainerSection,
-    ContainerGallery,
-    ContainerFile,
-    ContainerActionRow,
-    ContainerSpoiler,
-)
-from .ui.asset import AssetEmbed, AssetNoEmbed, AssetGetFrom
-
-__version__ = "0.1.0"
+from .bot import Bot
+from .logger import log, setup_logging
+from .permissions import Permissions
+from .variables import VARIABLES, register
 
 __all__ = [
     "Client",
-    "Intents",
+    "Bot",
+    "log",
+    "setup_logging",
     "Permissions",
-    "Embed",
-    "Button",
-    "Select",
-    "SelectOption",
-    "Modal",
-    "ModalInput",
-    "View",
-    "Container",
-    "ContainerText",
-    "ContainerSeparator",
-    "ContainerImage",
-    "ContainerThumbnail",
-    "ContainerSection",
-    "ContainerGallery",
-    "ContainerFile",
-    "ContainerActionRow",
-    "ContainerSpoiler",
-    "AssetEmbed",
-    "AssetNoEmbed",
-    "AssetGetFrom",
-    "DiseasyException",
-    "GatewayError",
-    "HTTPException",
-    "CommandError",
-    "CommandNotFound",
-    "MissingPermissions",
-    "CommandOnCooldown",
-    "BadArgument",
-    "CheckFailure",
-    "CustomError",
+    "VARIABLES",
+    "register",
 ]
+
+__version__ = "0.1.1"
