@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diseasy"
+version = "0.1.0"
+description = "A from-scratch Discord bot library, inspired by discord.py"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Diseasy Contributors" }]
+dependencies = [
+    "aiohttp>=3.9",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourname/diseasy"
+Documentation = "https://diseasy.readthedocs.io"
+Issues = "https://github.com/yourname/diseasy/issues"
+
+[tool.setuptools.packages.find]
+include = ["diseasy*"]
