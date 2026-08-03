@@ -17,7 +17,8 @@ from .permissions import Permissions
 
 class Bot(Client):
     def __init__(self, intents=None, prefix="!"):
-        super().__init__(intents=intents, prefix=prefix)
+        super().__init__(intents=intents)  # only intents goes to Client
+        self.prefix = prefix
         self._cogs = {}
 
     # ---- cogs ----
