@@ -3,8 +3,9 @@ as gateway events (.event[]) come in."""
 
 
 class ConnectionState:
-    def __init__(self, dispatch):
-        self._dispatch = dispatch
+    def __init__(self, client):
+        self._client = client
+        self._dispatch = client.dispatch
         self.guilds: dict[int, object] = {}
         self.users: dict[int, object] = {}
         self.channels: dict[int, object] = {}
@@ -37,3 +38,14 @@ class ConnectionState:
 
     def parse_ready(self, data: dict):
         self._dispatch("ready")
+
+    def parse_interaction_create(self, data: dict):
+        """
+        NEW — did not exist before. Without this, slash command
+        interactions fell through to the generic else-branch in
+        parse() and were dispatched as a raw dict, never as a real
+        Interaction object.
+        """
+        from .ext.slash.core import Interaction
+        interaction = Interaction(data, http=self._client._http)
+        self._dispatch("interaction_create", interaction)

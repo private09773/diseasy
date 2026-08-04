@@ -64,3 +64,39 @@ class HTTPClient:
             Route("PUT", "/applications/{application_id}/commands", application_id=application_id),
             json=commands,
         )
+
+    async def create_interaction_response(self, interaction_id: int, interaction_token: str,
+                                           *, content=None, embeds=None, components=None,
+                                           ephemeral=False):
+        """
+        Responds to a slash command / component interaction.
+        Discord requires this within 3 seconds of receiving the
+        interaction, via a different endpoint than regular messages.
+
+        NEW METHOD — did not exist in the original file. Needed
+        because Interaction.send() (in ext/slash/core.py) has
+        nothing else in HTTPClient it could call.
+        """
+        data = {}
+        if content is not None:
+            data["content"] = content
+        if embeds is not None:
+            data["embeds"] = embeds
+        if components is not None:
+            data["components"] = components
+        if ephemeral:
+            data["flags"] = 64  # EPHEMERAL flag
+
+        payload = {
+            "type": 4,  # CHANNEL_MESSAGE_WITH_SOURCE
+            "data": data,
+        }
+        return await self.request(
+            Route(
+                "POST",
+                "/interactions/{interaction_id}/{interaction_token}/callback",
+                interaction_id=interaction_id,
+                interaction_token=interaction_token,
+            ),
+            json=payload,
+        )
