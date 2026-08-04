@@ -52,6 +52,34 @@ class Gateway:
             elif op == OpCode.DISPATCH:
                 self.client._state.parse(payload["t"], payload["d"])
 
+    async def update_presence(self, payload: dict):
+        """
+        NEW METHOD — did not exist before. Sends a Discord Gateway
+        opcode 3 (PRESENCE_UPDATE) frame, which is how a bot's
+        status/activity (Playing, Watching, custom status, etc.)
+        actually gets set. Called by Client/Bot.set_presence().
+
+        ASSUMPTION FLAG: uses OpCode.PRESENCE_UPDATE — I don't have
+        enums.py, so I don't know for certain that value is defined
+        there. Discord's real gateway opcode for this is 3. If
+        OpCode.PRESENCE_UPDATE doesn't exist in your enums.py, this
+        will raise an AttributeError — add it there (value 3) or
+        swap the line below to use the literal integer 3 directly.
+
+        Also requires the websocket to already be connected — calling
+        this before connect() has completed will fail since self._ws
+        is None.
+        """
+        if self._ws is None:
+            raise RuntimeError(
+                "Cannot update presence — gateway is not connected yet."
+            )
+        try:
+            op_value = OpCode.PRESENCE_UPDATE
+        except AttributeError:
+            op_value = 3  # Discord's real PRESENCE_UPDATE opcode, as a fallback
+        await self._ws.send_json({"op": op_value, "d": payload})
+
     async def close(self):
         if self._heartbeat_task:
             self._heartbeat_task.cancel()

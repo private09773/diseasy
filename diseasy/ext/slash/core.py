@@ -67,3 +67,5 @@ def slash_command(name: str, description: str = ""):
     def decorator(func) -> SlashCommand:
         return SlashCommand(func, name=name, description=description)
     return decorator
+    
+self.command_name = data.get("data", {}).get("name")

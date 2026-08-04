@@ -15,7 +15,10 @@ class Client:
             intents = Intents.from_names(intents)
         self.intents = intents or Intents(0)
         self._listeners: dict[str, list] = defaultdict(list)
-        self._state = ConnectionState(self.dispatch)
+        # CHANGED: was ConnectionState(self.dispatch) — state.py now
+        # needs the whole client (to reach self._http for interaction
+        # responses), not just the bound dispatch method.
+        self._state = ConnectionState(self)
         self._http: HTTPClient | None = None
         self._gateway: Gateway | None = None
 
