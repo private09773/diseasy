@@ -15,8 +15,15 @@ class SlashOption:
 class Interaction:
     """Wraps a raw interaction payload and exposes <option.from""> access."""
 
-    def __init__(self, data: dict):
+    def __init__(self, data: dict, http=None):
         self._data = data
+        self._http = http
+        self.id = data.get("id")
+        self.token = data.get("token")
+        # NEW — needed so Bot._dispatch_slash_command can route an
+        # incoming interaction to the right registered SlashCommand
+        # by name, instead of reaching into interaction._data directly.
+        self.command_name = data.get("data", {}).get("name")
         self._options = {
             opt["name"]: opt.get("value")
             for opt in data.get("data", {}).get("options", [])
@@ -25,6 +32,25 @@ class Interaction:
     def option_from(self, name: str):
         """Equivalent to the notation's <option.from"name">."""
         return self._options.get(name)
+
+    async def send(self, message: str = "", *, embed=None, components=None, ephemeral=False):
+        """
+        Responds to this interaction. Requires self._http to have
+        been set at construction time.
+        """
+        if self._http is None:
+            raise RuntimeError(
+                "Interaction has no HTTP client attached — it must be "
+                "constructed with Interaction(data, http=client._http)."
+            )
+        return await self._http.create_interaction_response(
+            self.id,
+            self.token,
+            content=message,
+            embeds=[embed] if embed else None,
+            components=components,
+            ephemeral=ephemeral,
+        )
 
 
 class SlashCommand:
@@ -67,5 +93,3 @@ def slash_command(name: str, description: str = ""):
     def decorator(func) -> SlashCommand:
         return SlashCommand(func, name=name, description=description)
     return decorator
-    
-self.command_name = data.get("data", {}).get("name")
