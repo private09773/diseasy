@@ -1,18 +1,35 @@
 """
-diseasy/context.py (v0.1.1a)
+diseasy/context.py (v0.2.3)
 
-ctx.send now takes message as a keyword, matching the message=f""
-call style rather than a positional string. This is a breaking
-change from prior versions where ctx.send("text") was positional.
-
-NOTE: I don't have your actual Context/HTTP-sending class, so this
-is a standalone reference implementation. Merge the send() method
-below into your real class rather than replacing the whole file —
-your real version almost certainly also handles embeds, files,
-components, etc. that aren't reproduced here.
+ctx.send auto-resolves <var> tokens in the message AND now in Embed
+content (title, description, field names/values, footer) before
+sending. Accepts a real Embed object (diseasy.Embed), converting it
+to Discord's real embed JSON shape via .to_dict().
 """
 
+from diseasy.runtime import resolve_vars
 from .logger import log
+
+
+def _resolve_embed(embed, ctx, local_vars) -> dict:
+    """
+    Resolves <var> tokens in every string field of an Embed before
+    converting it to a plain dict for sending.
+    """
+    data = embed.to_dict()
+
+    if "title" in data:
+        data["title"] = resolve_vars(data["title"], ctx, local_vars)
+    if "description" in data:
+        data["description"] = resolve_vars(data["description"], ctx, local_vars)
+    if "fields" in data:
+        for field in data["fields"]:
+            field["name"] = resolve_vars(field["name"], ctx, local_vars)
+            field["value"] = resolve_vars(field["value"], ctx, local_vars)
+    if "footer" in data and "text" in data["footer"]:
+        data["footer"]["text"] = resolve_vars(data["footer"]["text"], ctx, local_vars)
+
+    return data
 
 
 class Context:
@@ -26,29 +43,32 @@ class Context:
     async def send(self, message: str = "", *, embed=None, view=None, ephemeral=False):
         """
         Sends a message to the channel this context belongs to.
-
-        Old style (v0.1.1 and earlier):
-            await ctx.send("Hello!")
-
-        New style (v0.1.1a):
-            await ctx.send(message=f"Hello {ctx.author.name}!")
-
-        Both still work here since `message` accepts a positional or
-        keyword string — but going forward, examples/docs should use
-        the message=f"" form for clarity, matching the rest of the
-        notation's explicitness.
+        <var> tokens inside `message` AND inside `embed` (title,
+        description, fields, footer) are resolved automatically.
         """
-        if not message and not embed:
+        local_vars = {
+            "ctx": self,
+            "member": getattr(self, "member", None),
+            "author": self.author,
+        }
+
+        resolved_message = resolve_vars(message, self, local_vars) if message else message
+
+        resolved_embed = None
+        if embed is not None:
+            if hasattr(embed, "to_dict"):
+                resolved_embed = _resolve_embed(embed, self, local_vars)
+            else:
+                # Fallback: plain dict was passed directly (e.g. from
+                # the parser's older __embed dict-guess) — send as-is.
+                resolved_embed = embed
+
+        if not resolved_message and not resolved_embed:
             log.warning("ctx.send called with no message or embed content")
 
-        payload = {"content": message}
-        if embed is not None:
-            payload["embed"] = embed
-        if view is not None:
-            payload["components"] = view.to_payload()
-
-        return await self.bot.http.send_message(
+        return await self.bot._http.send_message(
             channel_id=self.channel.id,
-            payload=payload,
-            ephemeral=ephemeral,
+            content=resolved_message,
+            embeds=[resolved_embed] if resolved_embed else None,
+            components=view.to_payload() if view else None,
         )

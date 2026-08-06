@@ -2,6 +2,24 @@
 as gateway events (.event[]) come in."""
 
 
+class _BasicUser:
+    """
+    Minimal stand-in for the bot's own user object, built from
+    Discord's real READY payload shape (data["user"]["id"/"username"]).
+
+    ASSUMPTION FLAG: I don't have confirmation that a real User model
+    exists elsewhere in your codebase (e.g. diseasy/models/user.py).
+    If one does, this should be replaced with User.from_payload(...)
+    the same way parse_message_create uses Message.from_payload(...)
+    and parse_guild_create uses Guild.from_payload(...) — this class
+    is a fallback so client.user.name at least works today.
+    """
+    def __init__(self, data: dict):
+        self.id = data.get("id")
+        self.name = data.get("username")
+        self.discriminator = data.get("discriminator")
+
+
 class ConnectionState:
     def __init__(self, client):
         self._client = client
@@ -37,15 +55,18 @@ class ConnectionState:
         self._dispatch("guild_join", guild)
 
     def parse_ready(self, data: dict):
+        """
+        CHANGED (v0.2.3): now actually sets self._client.user from
+        the READY payload — previously this only dispatched "ready"
+        with no data, meaning client.user was never set at all, and
+        logger.py's log_online() would always print "bot" as a
+        fallback instead of the real bot name.
+        """
+        user_data = data.get("user", {})
+        self._client.user = _BasicUser(user_data)
         self._dispatch("ready")
 
     def parse_interaction_create(self, data: dict):
-        """
-        NEW — did not exist before. Without this, slash command
-        interactions fell through to the generic else-branch in
-        parse() and were dispatched as a raw dict, never as a real
-        Interaction object.
-        """
         from .ext.slash.core import Interaction
         interaction = Interaction(data, http=self._client._http)
         self._dispatch("interaction_create", interaction)
