@@ -8,7 +8,7 @@ components, and events.
 - Gateway + REST client built from scratch
 - Slash and prefix commands
 - Cogs for modular bot organization
-- Embeds v1 (classic) and Embeds v2 (container-based components)
+- Embeds (classic) and Components (container-based components)
 - Buttons, select menus, modals, persistent views
 - Task loops, sharding, rate-limit handling
 
@@ -27,8 +27,9 @@ client = diseasy.Client(intents=["guilds", "messages"])
 async def on_ready():
     print("Diseasy is ready.")
 
-client.run("TOKEN")
+client.run("TOKEN") 
 ```
+*The example here is outdated, please refer to the examples folder as it will be updated soon.*
 
 ## Documentation
 See docs/ for the full API reference and notation spec.
