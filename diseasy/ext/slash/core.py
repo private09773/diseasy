@@ -20,10 +20,10 @@ class Interaction:
         self._http = http
         self.id = data.get("id")
         self.token = data.get("token")
-        # NEW — needed so Bot._dispatch_slash_command can route an
-        # incoming interaction to the right registered SlashCommand
-        # by name, instead of reaching into interaction._data directly.
+        self.type = data.get("type")  # 2 = command, 3 = component
         self.command_name = data.get("data", {}).get("name")
+        self.custom_id = data.get("data", {}).get("custom_id")
+        self.values = data.get("data", {}).get("values", [])  # selected dropdown value(s)
         self._options = {
             opt["name"]: opt.get("value")
             for opt in data.get("data", {}).get("options", [])
@@ -51,6 +51,28 @@ class Interaction:
             components=components,
             ephemeral=ephemeral,
         )
+
+    async def create_channel(self, name: str, type: int = 0):
+        """
+        Creates a text channel (type=0) in the guild this interaction
+        came from, guarded automatically against nuke-bot-style abuse
+        (rapid creation + suspicious name patterns).
+
+        Raises ChannelCreationBlocked if the guard rejects it.
+        """
+        from ..anti_nuke import get_default_guard
+
+        guild_id = self._data.get("guild_id")
+        if guild_id is None:
+            raise RuntimeError("This interaction has no guild_id — "
+                                "create_channel() only works in a guild.")
+
+        guard = get_default_guard()
+        guard.check(guild_id, name)  # raises ChannelCreationBlocked if rejected
+
+        result = await self._http.create_guild_channel(guild_id, name=name, type=type)
+        guard.record_creation(guild_id)
+        return result
 
 
 class SlashCommand:

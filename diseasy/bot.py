@@ -2,10 +2,9 @@
 diseasy/bot.py
 
 Built on the real Client (client.py) — uses .event()/dispatch()/
-_listeners. Adds cog loading, standalone command support (so a
-@command-decorated function defined directly in main.py still
-works, not just inside cogs), presence, and permission-gated
-commands.
+_listeners. Adds cog loading, standalone command support, presence,
+permission-gated commands, and (v0.2.4) button/dropdown component
+routing alongside slash command routing.
 """
 
 import asyncio
@@ -28,6 +27,7 @@ class Bot(Client):
         self._cogs = {}
         self._standalone_commands: dict[str, Command] = {}
         self._standalone_slash_commands: dict[str, SlashCommand] = {}
+        self._components: dict[str, object] = {}  # custom_id -> Button/Dropdown
 
         @self.event(name="on_ready")
         async def _bot_ready(*args):
@@ -39,13 +39,12 @@ class Bot(Client):
 
         @self.event(name="on_interaction_create")
         async def _bot_on_interaction(interaction):
-            await self._dispatch_slash_command(interaction)
+            if interaction.type == 3:  # MESSAGE_COMPONENT (button/dropdown)
+                await self._dispatch_component(interaction)
+            else:  # 2 = APPLICATION_COMMAND (slash command)
+                await self._dispatch_slash_command(interaction)
 
     # ---- standalone commands (main.py-level, not inside a cog) ----
-    # NEW — this is the missing piece from earlier: a bare
-    # @command(...)-decorated function needs to be explicitly handed
-    # to the bot to actually be registered/dispatched. Confirmed
-    # Command objects (from ext/commands/core.py) are what get passed.
 
     def add_command(self, cmd: Command):
         self._standalone_commands[cmd.name] = cmd
@@ -54,6 +53,12 @@ class Bot(Client):
     def add_slash_command(self, cmd: SlashCommand):
         self._standalone_slash_commands[cmd.name] = cmd
         log.info(f"Registered standalone slash command: {cmd.name}")
+
+    def add_component(self, component):
+        """Registers a Button or Dropdown so its custom_id routes
+        correctly when a real click/selection comes in."""
+        self._components[component.custom_id] = component
+        log.info(f"Registered component: {component.custom_id}")
 
     async def _dispatch_command(self, message):
         if not hasattr(message, "content") or not message.content.startswith(self.prefix):
@@ -72,17 +77,9 @@ class Bot(Client):
                 await cmd.invoke(message)
             except Exception as e:
                 log.error(f"Command '{name}' raised an error: {e}")
-        # Unknown commands are silently ignored (discord.py's default
-        # behavior too) rather than logged as noise on every typo/
-        # unrelated message.
 
     async def _dispatch_slash_command(self, interaction):
-        # ASSUMPTION FLAG: assumes `interaction` exposes the invoked
-        # command's name somewhere accessible — Interaction (from
-        # ext/slash/core.py) doesn't currently expose this at all.
-        # This will need Interaction to also capture data["data"]["name"]
-        # at construction time before this can actually route correctly.
-        cmd_name = interaction._data.get("data", {}).get("name")
+        cmd_name = interaction.command_name
         if not cmd_name:
             return
 
@@ -98,6 +95,25 @@ class Bot(Client):
                 await cmd.invoke(interaction)
             except Exception as e:
                 log.error(f"Slash command '{cmd_name}' raised an error: {e}")
+        else:
+            log.warning(f"Unknown slash command invoked: {cmd_name}")
+
+    async def _dispatch_component(self, interaction):
+        component = self._components.get(interaction.custom_id)
+        if not component:
+            log.warning(f"Unknown component clicked: {interaction.custom_id}")
+            return
+
+        try:
+            if interaction.values:
+                # Dropdown — Discord sends selected value(s) as a list;
+                # single-select dropdowns use the first one.
+                await component.invoke(interaction, interaction.values[0])
+            else:
+                # Button
+                await component.invoke(interaction)
+        except Exception as e:
+            log.error(f"Component '{interaction.custom_id}' raised an error: {e}")
 
     # ---- cogs ----
 

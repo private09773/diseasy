@@ -100,3 +100,9 @@ class HTTPClient:
             ),
             json=payload,
         )
+    async def create_guild_channel(self, guild_id: int, *, name: str, type: int = 0):
+        payload = {"name": name, "type": type}
+        return await self.request(
+            Route("POST", "/guilds/{guild_id}/channels", guild_id=guild_id),
+            json=payload,
+        )
