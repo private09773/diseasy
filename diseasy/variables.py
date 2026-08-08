@@ -26,6 +26,9 @@ def _user_avatar(ctx): return str(ctx.author.avatar_url) if hasattr(ctx.author, 
 @register("user.joined_at")
 def _user_joined_at(ctx): return getattr(ctx.author, "joined_at", None)
 
+@register("user.guild_join.at")
+def _user_guild_join_at(ctx): return getattr(ctx.author, "guild_joined_at", None)
+    
 @register("user.top_role")
 def _user_top_role(ctx): return getattr(ctx.author, "top_role", None)
 
