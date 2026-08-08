@@ -19,6 +19,7 @@ class Client:
         self._state = ConnectionState(self)
         self._http: HTTPClient | None = None
         self._gateway: Gateway | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
         @self.event(name="on_ready")
         async def _log_ready(*args):
@@ -41,13 +42,14 @@ class Client:
 
     async def start(self, token: str):
         """
-        CHANGED (v0.2.4ab): wrapped in try/finally so self._http and
-        self._gateway are ALWAYS closed, even if the gateway
-        connection drops unexpectedly or raises mid-session. This is
-        what was causing the "Unclosed client session" warnings —
-        previously, any exception during connect()/the receive loop
-        left both aiohttp sessions dangling with nothing to close them.
+        Stores a reference to the running event loop (self._loop) —
+        needed so anything outside the bot's own thread (like the
+        dashboard's Flask server, running in a background thread) can
+        safely schedule work onto it via
+        asyncio.run_coroutine_threadsafe(), instead of touching bot
+        state directly from a different thread.
         """
+        self._loop = asyncio.get_running_loop()
         self._http = HTTPClient(token)
         await self._http.start()
         try:
@@ -71,12 +73,6 @@ class Client:
             raise
 
     async def close(self):
-        """
-        CHANGED (v0.2.4ab): now safe to call multiple times (e.g. once
-        from start()'s finally block, and again if the user calls it
-        manually) — each check guards against a None or already-closed
-        resource instead of assuming both exist.
-        """
         if self._gateway:
             await self._gateway.close()
         if self._http:

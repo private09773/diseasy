@@ -3,9 +3,9 @@ diseasy/bot.py
 
 Built on the real Client (client.py). Adds cog loading, standalone
 command support, presence, permission-gated commands, button/dropdown
-component routing, automatic slash command syncing, and (this update)
-specific CommandNeverLoaded/CommandDoesntWork errors instead of
-generic log warnings.
+component routing, automatic slash command syncing, specific
+CommandNeverLoaded/CommandDoesntWork errors, and (this update) an
+optional prefix — slash-only bots no longer need to set one.
 """
 
 import asyncio
@@ -22,7 +22,17 @@ from .ext.slash.core import SlashCommand
 
 
 class Bot(Client):
-    def __init__(self, intents=None, prefix="!"):
+    def __init__(self, intents=None, prefix=None):
+        """
+        prefix is now optional (default None). A bot that only uses
+        slash commands never needs one — previously prefix defaulted
+        to "!" unconditionally, forcing every bot to have a message
+        prefix whether it used prefix commands or not.
+
+        If prefix is None, on_message dispatch for prefix commands is
+        skipped entirely rather than matching against a fallback
+        prefix nobody asked for.
+        """
         super().__init__(intents=intents)
         _init_logging()
         self.prefix = prefix
@@ -38,7 +48,8 @@ class Bot(Client):
 
         @self.event(name="on_message")
         async def _bot_on_message(message):
-            await self._dispatch_command(message)
+            if self.prefix is not None:
+                await self._dispatch_command(message)
 
         @self.event(name="on_interaction_create")
         async def _bot_on_interaction(interaction):
@@ -72,6 +83,13 @@ class Bot(Client):
     # ---- standalone commands ----
 
     def add_command(self, cmd: Command):
+        if self.prefix is None:
+            log.warning(
+                f"Registered command '{cmd.name}' but this bot has no "
+                f"prefix set — it will never be triggered by a message. "
+                f"Set Bot(prefix=\"!\") if you want prefix commands to work, "
+                f"or use @slash_command instead."
+            )
         self._standalone_commands[cmd.name] = cmd
         log.info(f"Registered standalone command: {cmd.name}")
 
@@ -108,10 +126,6 @@ class Bot(Client):
 
         cmd = self._find_command(name)
         if not cmd:
-            # CHANGED: specific CommandNeverLoaded instead of a bare
-            # log.warning — makes clear this command was never
-            # registered at all, distinct from a command that exists
-            # but fails when run.
             err = CommandNeverLoaded(name)
             log.warning(str(err))
             return
@@ -119,9 +133,6 @@ class Bot(Client):
         try:
             await cmd.invoke(message)
         except Exception as e:
-            # CHANGED: wraps the failure as CommandDoesntWork so the
-            # log clearly distinguishes "found but broke" from "never
-            # existed", while still surfacing the friendly hint.
             wrapped = CommandDoesntWork(name, e)
             log.error(f"{wrapped}\n    → {friendly_error(e)}")
 
@@ -198,6 +209,12 @@ class Bot(Client):
             await self._gateway.update_presence(payload)
         else:
             log.warning("Cannot set presence before the bot has connected.")
+
+    # ---- dashboard ----
+
+    def start_dashboard(self, host: str = "127.0.0.1", port: int = 5000):
+        from .dashboard import start_dashboard as _start_dashboard
+        return _start_dashboard(self, host=host, port=port)
 
     # ---- permissions ----
 
