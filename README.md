@@ -8,7 +8,7 @@ components, and events.
 - Gateway + REST client built from scratch
 - Slash and prefix commands
 - Cogs for modular bot organization
-- Embeds (classic) and Components (container-based components)
+- Embeds (classic) and Components (container-based components) (coming soon).
 - Buttons, select menus, modals, persistent views
 - Task loops, sharding, rate-limit handling
 
