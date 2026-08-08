@@ -72,10 +72,6 @@ class HTTPClient:
         Responds to a slash command / component interaction.
         Discord requires this within 3 seconds of receiving the
         interaction, via a different endpoint than regular messages.
-
-        NEW METHOD — did not exist in the original file. Needed
-        because Interaction.send() (in ext/slash/core.py) has
-        nothing else in HTTPClient it could call.
         """
         data = {}
         if content is not None:
@@ -100,7 +96,10 @@ class HTTPClient:
             ),
             json=payload,
         )
+
     async def create_guild_channel(self, guild_id: int, *, name: str, type: int = 0):
+        """Creates a channel in a guild. type=0 is a text channel
+        (Discord's real channel type enum)."""
         payload = {"name": name, "type": type}
         return await self.request(
             Route("POST", "/guilds/{guild_id}/channels", guild_id=guild_id),

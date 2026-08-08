@@ -20,8 +20,6 @@ class Client:
         self._http: HTTPClient | None = None
         self._gateway: Gateway | None = None
 
-        # Built-in online/offline status logging (v0.2.3) — fires
-        # regardless of whether the user registers their own on_ready.
         @self.event(name="on_ready")
         async def _log_ready(*args):
             guild_count = len(getattr(self._state, "guilds", {}))
@@ -38,27 +36,29 @@ class Client:
         return decorator
 
     def dispatch(self, event_name: str, *args):
-        """
-        CHANGED (v0.2.3): each callback now runs through
-        safe_dispatch() instead of being handed directly to
-        asyncio.ensure_future(). This means an exception inside a
-        command/event handler gets logged clearly (with a beginner-
-        friendly hint where available) instead of silently vanishing
-        into asyncio's "Task exception was never retrieved" warning.
-        """
         for callback in self._listeners.get(event_name, []):
             asyncio.ensure_future(safe_dispatch(callback, *args))
 
     async def start(self, token: str):
+        """
+        CHANGED (v0.2.4ab): wrapped in try/finally so self._http and
+        self._gateway are ALWAYS closed, even if the gateway
+        connection drops unexpectedly or raises mid-session. This is
+        what was causing the "Unclosed client session" warnings —
+        previously, any exception during connect()/the receive loop
+        left both aiohttp sessions dangling with nothing to close them.
+        """
         self._http = HTTPClient(token)
         await self._http.start()
-        gateway_data = await self._http.get_gateway_bot()
-        self._gateway = Gateway(self, token, self.intents)
         try:
+            gateway_data = await self._http.get_gateway_bot()
+            self._gateway = Gateway(self, token, self.intents)
             await self._gateway.connect(gateway_data["url"] + "?v=10&encoding=json")
         except Exception as e:
             log_offline(str(e))
             raise
+        finally:
+            await self.close()
 
     def run(self, token: str):
         """Blocking entrypoint — starts the event loop and connects."""
@@ -71,8 +71,14 @@ class Client:
             raise
 
     async def close(self):
+        """
+        CHANGED (v0.2.4ab): now safe to call multiple times (e.g. once
+        from start()'s finally block, and again if the user calls it
+        manually) — each check guards against a None or already-closed
+        resource instead of assuming both exist.
+        """
         if self._gateway:
             await self._gateway.close()
         if self._http:
             await self._http.close()
-        log_offline("closed by close()")
+        log_offline("closed")
