@@ -37,4 +37,4 @@ See docs/ for the full API reference and notation spec.
 See CONTRIBUTING.md.
 
 ## License
-MIT — see LICENSE.
+GPL — see LICENSE.
