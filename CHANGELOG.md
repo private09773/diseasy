@@ -2,6 +2,8 @@
 
 All notable changes to Diseasy are documented here.
 
+*This changelog has been discontinued, please refer to releases only.*
+
 ## v0.2.3
 
 **Added**
