@@ -37,6 +37,7 @@ async def ping(self, interaction):
 @command(name="ping")
 async def ping(ctx):
     await ctx.send("Pong!")
+```
 
 ## 🧩 Fake Patch Notes
 - ❌ “Added dashboard in v0.3.0” → Dashboard integration is ongoing, not in that version.
