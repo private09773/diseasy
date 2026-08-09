@@ -23,12 +23,7 @@ import re
 import time
 from collections import defaultdict
 
-
-class ChannelCreationBlocked(Exception):
-    """Raised when a channel creation attempt fails a guard check."""
-    def __init__(self, reason: str):
-        self.reason = reason
-        super().__init__(reason)
+from .errors import ChannelCreationBlocked
 
 
 _SUSPICIOUS_PATTERNS = [

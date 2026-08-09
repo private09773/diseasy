@@ -4,8 +4,8 @@ diseasy/bot.py
 Built on the real Client (client.py). Adds cog loading, standalone
 command support, presence, permission-gated commands, button/dropdown/
 modal routing, automatic slash command syncing, specific
-CommandNeverLoaded/CommandDoesntWork errors, an optional prefix, and
-dashboard integration.
+CommandNeverLoaded/CommandDoesntWork errors with optional per-command
+overrides, an optional prefix, and dashboard integration.
 """
 
 import asyncio
@@ -22,13 +22,27 @@ from .ext.commands.core import Command
 from .ext.slash.core import SlashCommand
 
 
+async def _handle_command_error(ctx_or_interaction, cmd, name, exc):
+    """
+    Shared error-handling path for regular commands, slash commands,
+    components, and modals: if the command/component defines its own
+    .error() handler, that runs INSTEAD of the generic log.error()
+    fallback. Otherwise falls back to CommandDoesntWork + friendly_error.
+    """
+    handler = getattr(cmd, "_error_handler", None)
+    if handler:
+        try:
+            await handler(ctx_or_interaction, exc)
+            return
+        except Exception as handler_exc:
+            log.error(f"Error handler for '{name}' itself raised: {handler_exc}")
+
+    wrapped = CommandDoesntWork(name, exc)
+    log.error(f"{wrapped}\n    → {friendly_error(exc)}")
+
+
 class Bot(Client):
     def __init__(self, intents=None, prefix=None):
-        """
-        prefix is optional (default None). A slash-only bot never
-        needs one — if prefix is None, on_message dispatch for
-        prefix commands is skipped entirely.
-        """
         super().__init__(intents=intents)
         _init_logging()
         self.prefix = prefix
@@ -50,11 +64,11 @@ class Bot(Client):
 
         @self.event(name="on_interaction_create")
         async def _bot_on_interaction(interaction):
-            if interaction.type == 3:  # MESSAGE_COMPONENT
+            if interaction.type == 3:
                 await self._dispatch_component(interaction)
-            elif interaction.type == 5:  # MODAL_SUBMIT
+            elif interaction.type == 5:
                 await self._dispatch_modal(interaction)
-            else:  # 2 = APPLICATION_COMMAND
+            else:
                 await self._dispatch_slash_command(interaction)
 
     # ---- slash command sync ----
@@ -138,8 +152,7 @@ class Bot(Client):
         try:
             await cmd.invoke(message)
         except Exception as e:
-            wrapped = CommandDoesntWork(name, e)
-            log.error(f"{wrapped}\n    → {friendly_error(e)}")
+            await _handle_command_error(message, cmd, name, e)
 
     async def _dispatch_slash_command(self, interaction):
         cmd_name = interaction.command_name
@@ -155,8 +168,7 @@ class Bot(Client):
         try:
             await cmd.invoke(interaction)
         except Exception as e:
-            wrapped = CommandDoesntWork(cmd_name, e)
-            log.error(f"{wrapped}\n    → {friendly_error(e)}")
+            await _handle_command_error(interaction, cmd, cmd_name, e)
 
     async def _dispatch_component(self, interaction):
         component = self._components.get(interaction.custom_id)
@@ -170,8 +182,7 @@ class Bot(Client):
             else:
                 await component.invoke(interaction)
         except Exception as e:
-            wrapped = CommandDoesntWork(interaction.custom_id, e)
-            log.error(f"{wrapped}\n    → {friendly_error(e)}")
+            await _handle_command_error(interaction, component, interaction.custom_id, e)
 
     async def _dispatch_modal(self, interaction):
         modal = self._modals.get(interaction.custom_id)
@@ -184,8 +195,7 @@ class Bot(Client):
         try:
             await modal.invoke(interaction, values)
         except Exception as e:
-            wrapped = CommandDoesntWork(interaction.custom_id, e)
-            log.error(f"{wrapped}\n    → {friendly_error(e)}")
+            await _handle_command_error(interaction, modal, interaction.custom_id, e)
 
     # ---- cogs ----
 

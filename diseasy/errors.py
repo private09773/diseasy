@@ -90,6 +90,86 @@ class CheckFailure(CommandError):
     pass
 
 
+class ChannelCreationBlocked(DiseasyException):
+    """
+    Raised when the automatic anti-nuke guard blocks a channel
+    creation attempt — either because it happened too soon after a
+    previous one, or because the requested name matched a known
+    spam/nuke naming pattern.
+    """
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
+
+
+class MathError(DiseasyException):
+    """
+    Raised by diseasy.math_solver when an expression can't be parsed
+    or solved — malformed input, an unsupported operation, or (by
+    design) any attempted code-injection through the expression
+    parser, which fails safely as a parse error rather than executing.
+    """
+
+
+class ConfigError(DiseasyException):
+    """Base class for errors loading .env/config.json/config.yml/config.py."""
+
+
+class ConfigFileNotFound(ConfigError):
+    """
+    Raised when a config or .env file doesn't exist at the given
+    path. Distinct from Python's bare FileNotFoundError so it's
+    clear the problem is specifically Diseasy's config loading, not
+    some unrelated file operation.
+    """
+    def __init__(self, path: str):
+        self.path = path
+        super().__init__(
+            f"Config file not found: '{path}'. Check the path is "
+            f"correct and the file actually exists relative to where "
+            f"the bot is being run from."
+        )
+
+
+class ConfigParseError(ConfigError):
+    """
+    Raised when a config file exists but couldn't be parsed — invalid
+    JSON, invalid YAML, or a syntax error in a config.py file.
+    """
+    def __init__(self, path: str, original: Exception):
+        self.path = path
+        self.original = original
+        super().__init__(
+            f"Couldn't parse config file '{path}': "
+            f"{type(original).__name__}: {original}"
+        )
+
+
+class MissingConfigKey(ConfigError):
+    """
+    Raised when a config file loaded successfully, but a required key
+    (e.g. "token", "prefix") is missing from it.
+    """
+    def __init__(self, key: str, path: str = None):
+        self.key = key
+        self.path = path
+        location = f" in '{path}'" if path else ""
+        super().__init__(f"Missing required config key '{key}'{location}.")
+
+
+class EnvVariableMissing(ConfigError):
+    """
+    Raised when a required environment variable (typically loaded via
+    .env with python-dotenv) isn't set.
+    """
+    def __init__(self, var_name: str):
+        self.var_name = var_name
+        super().__init__(
+            f"Environment variable '{var_name}' is not set. Add it to "
+            f"your .env file, or set it directly in your environment."
+        )
+
+
 class CustomError(DiseasyException):
     """Base class for user-defined errors created via .customerror[]."""
 

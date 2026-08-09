@@ -4,9 +4,6 @@
 from dataclasses import dataclass, field
 
 
-# Discord's real slash command option types (numeric, per Discord's
-# API docs) — options now use these directly instead of friendly
-# string names like "str"/"user".
 OPTION_TYPES = {
     "1": "SUB_COMMAND",
     "2": "SUB_COMMAND_GROUP",
@@ -25,7 +22,7 @@ OPTION_TYPES = {
 @dataclass
 class SlashOption:
     name: str
-    type: str = "3"  # STRING, matching Discord's real default expectation
+    type: str = "3"
     required: bool = True
     description: str = ""
 
@@ -36,6 +33,24 @@ class SlashOption:
                 f"{list(OPTION_TYPES.keys())} (Discord's real numeric "
                 f"option type codes — e.g. '3' for STRING, '6' for USER)."
             )
+
+
+class _BasicInteractionUser:
+    """
+    Minimal stand-in for the person who triggered an interaction,
+    built directly from Discord's real payload data — no separate
+    User model assumed to exist elsewhere.
+    """
+    def __init__(self, data: dict):
+        self.id = data.get("id")
+        self.name = data.get("username")
+        self.discriminator = data.get("discriminator")
+        self.avatar = data.get("avatar")
+        self.bot = data.get("bot", False)
+
+    @property
+    def mention(self):
+        return f"<@{self.id}>"
 
 
 class Interaction:
@@ -54,6 +69,20 @@ class Interaction:
             opt["name"]: opt.get("value")
             for opt in data.get("data", {}).get("options", [])
         }
+
+        # NEW: the person who triggered this interaction. Discord's
+        # real payload nests this differently depending on context —
+        # data["member"]["user"] inside a guild, data["user"] in a DM.
+        # Neither is a flat top-level "user" field, which is why this
+        # was never confirmed working before.
+        user_data = None
+        member_data = data.get("member")
+        if member_data and "user" in member_data:
+            user_data = member_data["user"]
+        elif data.get("user"):
+            user_data = data["user"]
+
+        self.user = _BasicInteractionUser(user_data) if user_data else None
 
     def option_from(self, name: str):
         """Equivalent to the notation's <option.from"name">."""
@@ -100,8 +129,7 @@ class Interaction:
     async def show_modal(self, modal):
         """
         Shows a modal in response to this interaction. Must be the
-        interaction's first response — Discord doesn't allow showing
-        a modal after already sending a message response.
+        interaction's first response.
         """
         if self._http is None:
             raise RuntimeError(
@@ -118,15 +146,10 @@ class SlashCommand:
         self.description = description
         self.options: list[SlashOption] = []
         self.autocomplete_handlers: dict[str, callable] = {}
+        self._error_handler = None
 
     def slashoption(self, name: str, type: str = "3", required: bool = True,
                     description: str = "") -> "SlashCommand":
-        """
-        type: Discord's real numeric option type code, as a string.
-        e.g. "3" = STRING, "4" = INTEGER, "5" = BOOLEAN, "6" = USER,
-        "7" = CHANNEL, "8" = ROLE, "9" = MENTIONABLE, "10" = NUMBER,
-        "11" = ATTACHMENT.
-        """
         self.options.append(SlashOption(name=name, type=type, required=required,
                                          description=description))
         return self
@@ -137,14 +160,17 @@ class SlashCommand:
             return func
         return decorator
 
+    def error(self, func):
+        """Decorator: registers a custom error handler for this
+        specific slash command. Signature: async def handler(interaction, error)"""
+        self._error_handler = func
+        return func
+
     def to_dict(self) -> dict:
         return {
             "name": self.name,
             "description": self.description,
             "options": [
-                # CHANGED: type is now cast to a real int for Discord's
-                # API — previously this sent the friendly string name
-                # directly, which Discord's real API would reject.
                 {"name": o.name, "type": int(o.type), "required": o.required,
                  "description": o.description}
                 for o in self.options
