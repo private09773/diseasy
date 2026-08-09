@@ -105,3 +105,21 @@ class HTTPClient:
             Route("POST", "/guilds/{guild_id}/channels", guild_id=guild_id),
             json=payload,
         )
+
+    async def respond_with_modal(self, interaction_id: int, interaction_token: str,
+                                   modal_payload: dict):
+        """
+        Responds to an interaction by showing a modal. Uses the same
+        interaction-response endpoint as create_interaction_response,
+        just with the modal's own payload shape (type 9) instead of
+        a type-4 message response.
+        """
+        return await self.request(
+            Route(
+                "POST",
+                "/interactions/{interaction_id}/{interaction_token}/callback",
+                interaction_id=interaction_id,
+                interaction_token=interaction_token,
+            ),
+            json=modal_payload,
+        )

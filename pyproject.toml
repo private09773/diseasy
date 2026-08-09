@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "diseasy"
-version = "0.2.5"
+version = "0.3.0"
 description = "A Discord.py alternative library built from scratch"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = { text = "GPL-3" }
 authors = [
     { name = "airwhite", email = "airwhite20@gmail.com" }
 ]

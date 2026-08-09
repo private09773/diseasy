@@ -2,10 +2,10 @@
 diseasy/bot.py
 
 Built on the real Client (client.py). Adds cog loading, standalone
-command support, presence, permission-gated commands, button/dropdown
-component routing, automatic slash command syncing, specific
-CommandNeverLoaded/CommandDoesntWork errors, and (this update) an
-optional prefix — slash-only bots no longer need to set one.
+command support, presence, permission-gated commands, button/dropdown/
+modal routing, automatic slash command syncing, specific
+CommandNeverLoaded/CommandDoesntWork errors, an optional prefix, and
+dashboard integration.
 """
 
 import asyncio
@@ -17,6 +17,7 @@ from .logger import log, friendly_error, _init_logging
 from .permissions import Permissions, BotPermissions
 from .presence import build_presence_payload
 from .errors import CommandNeverLoaded, CommandDoesntWork
+from .modal import Modal
 from .ext.commands.core import Command
 from .ext.slash.core import SlashCommand
 
@@ -24,14 +25,9 @@ from .ext.slash.core import SlashCommand
 class Bot(Client):
     def __init__(self, intents=None, prefix=None):
         """
-        prefix is now optional (default None). A bot that only uses
-        slash commands never needs one — previously prefix defaulted
-        to "!" unconditionally, forcing every bot to have a message
-        prefix whether it used prefix commands or not.
-
-        If prefix is None, on_message dispatch for prefix commands is
-        skipped entirely rather than matching against a fallback
-        prefix nobody asked for.
+        prefix is optional (default None). A slash-only bot never
+        needs one — if prefix is None, on_message dispatch for
+        prefix commands is skipped entirely.
         """
         super().__init__(intents=intents)
         _init_logging()
@@ -40,6 +36,7 @@ class Bot(Client):
         self._standalone_commands: dict[str, Command] = {}
         self._standalone_slash_commands: dict[str, SlashCommand] = {}
         self._components: dict[str, object] = {}
+        self._modals: dict[str, Modal] = {}
 
         @self.event(name="on_ready")
         async def _bot_ready(*args):
@@ -53,9 +50,11 @@ class Bot(Client):
 
         @self.event(name="on_interaction_create")
         async def _bot_on_interaction(interaction):
-            if interaction.type == 3:
+            if interaction.type == 3:  # MESSAGE_COMPONENT
                 await self._dispatch_component(interaction)
-            else:
+            elif interaction.type == 5:  # MODAL_SUBMIT
+                await self._dispatch_modal(interaction)
+            else:  # 2 = APPLICATION_COMMAND
                 await self._dispatch_slash_command(interaction)
 
     # ---- slash command sync ----
@@ -101,6 +100,10 @@ class Bot(Client):
         self._components[component.custom_id] = component
         log.info(f"Registered component: {component.custom_id}")
 
+    def add_modal(self, modal: Modal):
+        self._modals[modal.custom_id] = modal
+        log.info(f"Registered modal: {modal.custom_id}")
+
     def _find_command(self, name: str):
         cmd = self._standalone_commands.get(name)
         if not cmd:
@@ -120,6 +123,8 @@ class Bot(Client):
         return cmd
 
     async def _dispatch_command(self, message):
+        if self.prefix is None:
+            return
         if not hasattr(message, "content") or not message.content.startswith(self.prefix):
             return
         name = message.content[len(self.prefix):].split(" ")[0]
@@ -164,6 +169,20 @@ class Bot(Client):
                 await component.invoke(interaction, interaction.values[0])
             else:
                 await component.invoke(interaction)
+        except Exception as e:
+            wrapped = CommandDoesntWork(interaction.custom_id, e)
+            log.error(f"{wrapped}\n    → {friendly_error(e)}")
+
+    async def _dispatch_modal(self, interaction):
+        modal = self._modals.get(interaction.custom_id)
+        if not modal:
+            log.warning(f"Unknown modal submitted: {interaction.custom_id}")
+            return
+
+        values = Modal.parse_submitted_values(interaction._data.get("data", {}))
+
+        try:
+            await modal.invoke(interaction, values)
         except Exception as e:
             wrapped = CommandDoesntWork(interaction.custom_id, e)
             log.error(f"{wrapped}\n    → {friendly_error(e)}")

@@ -4,12 +4,38 @@
 from dataclasses import dataclass, field
 
 
+# Discord's real slash command option types (numeric, per Discord's
+# API docs) — options now use these directly instead of friendly
+# string names like "str"/"user".
+OPTION_TYPES = {
+    "1": "SUB_COMMAND",
+    "2": "SUB_COMMAND_GROUP",
+    "3": "STRING",
+    "4": "INTEGER",
+    "5": "BOOLEAN",
+    "6": "USER",
+    "7": "CHANNEL",
+    "8": "ROLE",
+    "9": "MENTIONABLE",
+    "10": "NUMBER",
+    "11": "ATTACHMENT",
+}
+
+
 @dataclass
 class SlashOption:
     name: str
-    type: str = "str"
+    type: str = "3"  # STRING, matching Discord's real default expectation
     required: bool = True
     description: str = ""
+
+    def __post_init__(self):
+        if self.type not in OPTION_TYPES:
+            raise ValueError(
+                f"Unknown option type: '{self.type}'. Must be one of "
+                f"{list(OPTION_TYPES.keys())} (Discord's real numeric "
+                f"option type codes — e.g. '3' for STRING, '6' for USER)."
+            )
 
 
 class Interaction:
@@ -20,10 +46,10 @@ class Interaction:
         self._http = http
         self.id = data.get("id")
         self.token = data.get("token")
-        self.type = data.get("type")  # 2 = command, 3 = component
+        self.type = data.get("type")  # 2 = command, 3 = component, 5 = modal submit
         self.command_name = data.get("data", {}).get("name")
         self.custom_id = data.get("data", {}).get("custom_id")
-        self.values = data.get("data", {}).get("values", [])  # selected dropdown value(s)
+        self.values = data.get("data", {}).get("values", [])
         self._options = {
             opt["name"]: opt.get("value")
             for opt in data.get("data", {}).get("options", [])
@@ -55,10 +81,7 @@ class Interaction:
     async def create_channel(self, name: str, type: int = 0):
         """
         Creates a text channel (type=0) in the guild this interaction
-        came from, guarded automatically against nuke-bot-style abuse
-        (rapid creation + suspicious name patterns).
-
-        Raises ChannelCreationBlocked if the guard rejects it.
+        came from, guarded automatically against nuke-bot-style abuse.
         """
         from ..anti_nuke import get_default_guard
 
@@ -68,11 +91,24 @@ class Interaction:
                                 "create_channel() only works in a guild.")
 
         guard = get_default_guard()
-        guard.check(guild_id, name)  # raises ChannelCreationBlocked if rejected
+        guard.check(guild_id, name)
 
         result = await self._http.create_guild_channel(guild_id, name=name, type=type)
         guard.record_creation(guild_id)
         return result
+
+    async def show_modal(self, modal):
+        """
+        Shows a modal in response to this interaction. Must be the
+        interaction's first response — Discord doesn't allow showing
+        a modal after already sending a message response.
+        """
+        if self._http is None:
+            raise RuntimeError(
+                "Interaction has no HTTP client attached — it must be "
+                "constructed with Interaction(data, http=client._http)."
+            )
+        return await self._http.respond_with_modal(self.id, self.token, modal.to_payload())
 
 
 class SlashCommand:
@@ -83,8 +119,14 @@ class SlashCommand:
         self.options: list[SlashOption] = []
         self.autocomplete_handlers: dict[str, callable] = {}
 
-    def slashoption(self, name: str, type: str = "str", required: bool = True,
+    def slashoption(self, name: str, type: str = "3", required: bool = True,
                     description: str = "") -> "SlashCommand":
+        """
+        type: Discord's real numeric option type code, as a string.
+        e.g. "3" = STRING, "4" = INTEGER, "5" = BOOLEAN, "6" = USER,
+        "7" = CHANNEL, "8" = ROLE, "9" = MENTIONABLE, "10" = NUMBER,
+        "11" = ATTACHMENT.
+        """
         self.options.append(SlashOption(name=name, type=type, required=required,
                                          description=description))
         return self
@@ -100,7 +142,10 @@ class SlashCommand:
             "name": self.name,
             "description": self.description,
             "options": [
-                {"name": o.name, "type": o.type, "required": o.required,
+                # CHANGED: type is now cast to a real int for Discord's
+                # API — previously this sent the friendly string name
+                # directly, which Discord's real API would reject.
+                {"name": o.name, "type": int(o.type), "required": o.required,
                  "description": o.description}
                 for o in self.options
             ],
