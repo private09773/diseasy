@@ -11,8 +11,10 @@ from .client import Client
 from .bot import Bot
 from .logger import log, set_log_level, log_online, log_offline, friendly_error
 from .permissions import Permissions, BotPermissions
-from .variables import VARIABLES, register
-from .presence import playing, watching, listening, custom_status
+# variables excluded from public API (per your rule)
+# from .variables import VARIABLES, register
+from .presence import playing, watching, listening, custom_status  # status excluded
+# math, commands excluded
 from .runtime import resolve, resolve_vars
 from .fetch import fetch, insert, update, delete, set_db_path
 from .embed import Embed
@@ -34,12 +36,8 @@ __all__ = [
     "friendly_error",
     "Permissions",
     "BotPermissions",
-    "VARIABLES",
-    "register",
-    "playing",
-    "watching",
-    "listening",
-    "custom_status",
+    # VARIABLES, register excluded
+    # playing, watching, listening, custom_status excluded
     "resolve",
     "resolve_vars",
     "fetch",
