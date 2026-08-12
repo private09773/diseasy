@@ -4,20 +4,61 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "diseasy"
-version = "0.3.1"
-description = "A Discord.py alternative library built from scratch"
+version = "0.3.2"
+description = "A from-scratch, beginner-friendly Python library for building Discord bots"
 readme = "README.md"
-requires-python = ">=3.9"
-license = { text = "GPL-3" }
+requires-python = ">=3.10"
+license = { text = "GPL-3.0" }
 authors = [
-    { name = "airwhite", email = "airwhite20@gmail.com" }
+    { name = "private09773" }
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 ]
+
+# Core dependencies — required no matter what, since these back
+# features that are always available: the gateway/HTTP client
+# (aiohttp) and the built-in math solver (sympy).
 dependencies = [
-    # e.g. "aiohttp>=3.8"
+    "aiohttp>=3.8",
+    "sympy>=1.12",
+]
+
+[project.optional-dependencies]
+# diseasy[voice] — connect/disconnect to voice channels (v0.3.2).
+# Currently uses only the core aiohttp dependency already required
+# above; this group exists to signal intent and give future audio
+# playback/recording support (PyNaCl for voice encryption, an Opus
+# binding) somewhere to land without becoming a core dependency for
+# bots that never touch voice.
+voice = []
+
+# diseasy[dashboard] — the experimental web dashboard (v0.2.5+).
+dashboard = [
+    "flask>=3.0",
+]
+
+# diseasy[yaml] — config.yml/.yaml support in diseasy.config.
+# Without this installed, load_config() still works fine for .json
+# and .py configs; only YAML files raise a clear ConfigParseError
+# telling the user to install this extra.
+yaml = [
+    "pyyaml>=6.0",
+]
+
+# diseasy[all] — everything above, for development or anyone who
+# wants the full feature set installed without picking extras.
+all = [
+    "flask>=3.0",
+    "pyyaml>=6.0",
+]
+
+dev = [
+    "pytest>=7.0",
+    "build",
+    "twine",
 ]
 
 [project.urls]

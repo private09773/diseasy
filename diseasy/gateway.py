@@ -153,6 +153,29 @@ class Gateway:
             raise RuntimeError("Cannot update presence — gateway is not connected yet.")
         await self._ws.send_json({"op": OpCode.PRESENCE_UPDATE, "d": payload})
 
+    async def update_voice_state(self, guild_id: int, channel_id: int | None,
+                                   self_mute: bool = False, self_deaf: bool = False):
+        """
+        Sends opcode 4 (VOICE_STATE_UPDATE) on the MAIN gateway — this
+        is how a bot tells Discord to join (channel_id set) or leave
+        (channel_id=None) a voice channel. Discord responds with
+        VOICE_STATE_UPDATE and VOICE_SERVER_UPDATE dispatch events,
+        which is what VoiceClient waits on before opening the actual
+        voice websocket connection.
+        """
+        if self._ws is None:
+            raise RuntimeError("Cannot update voice state — gateway is not connected yet.")
+        payload = {
+            "op": 4,  # Discord's real VOICE_STATE_UPDATE opcode
+            "d": {
+                "guild_id": str(guild_id),
+                "channel_id": str(channel_id) if channel_id else None,
+                "self_mute": self_mute,
+                "self_deaf": self_deaf,
+            },
+        }
+        await self._ws.send_json(payload)
+
     async def close(self):
         self._should_reconnect = False
         if self._heartbeat_task:
